@@ -53,3 +53,37 @@ def test_custom_hotspot_threshold():
     }
 
     assert find_hotspots(changes, threshold=2) == changes
+
+
+from src.main import find_co_changed_files
+
+
+def test_find_co_changed_files():
+    history = (
+        "COMMIT:abc123\n"
+        "src/main.py\n"
+        "src/utils.py\n"
+        "\n"
+        "COMMIT:def456\n"
+        "src/main.py\n"
+        "src/utils.py\n"
+        "\n"
+        "COMMIT:ghi789\n"
+        "README.md\n"
+    )
+
+    result = find_co_changed_files(history)
+
+    assert result == {
+        ("src/main.py", "src/utils.py"): 2
+    }
+
+
+def test_co_changed_files_respect_threshold():
+    history = (
+        "COMMIT:abc123\n"
+        "src/main.py\n"
+        "README.md\n"
+    )
+
+    assert find_co_changed_files(history) == {}

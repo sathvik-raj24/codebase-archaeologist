@@ -5,6 +5,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 
 
 HOTSPOT_THRESHOLD = 3
+CO_CHANGE_THRESHOLD = 2
 
 
 def run_git_command(arguments):
@@ -78,7 +79,6 @@ def count_file_changes(log_output):
         elif line and not should_ignore_file(line):
             files_in_commit.add(line)
 
-    # Process files from the final commit.
     for filename in files_in_commit:
         changes[filename] += 1
 
@@ -97,7 +97,7 @@ def get_file_changes():
 
 
 def find_hotspots(changes, threshold=HOTSPOT_THRESHOLD):
-    """Find files changed in at least the threshold number of commits."""
+    """Find files changed in at least the specified number of commits."""
     return {
         filename: count
         for filename, count in changes.items()
@@ -105,18 +105,72 @@ def find_hotspots(changes, threshold=HOTSPOT_THRESHOLD):
     }
 
 
+def find_co_changed_files(
+    log_output,
+    min_shared_commits=CO_CHANGE_THRESHOLD
+):
+    """Find file pairs that change together in multiple commits."""
+    pair_counts = Counter()
+    files_in_commit = set()
+
+    def record_pairs(files):
+        ordered_files = sorted(files)
+
+        for i in range(len(ordered_files)):
+            for j in range(i + 1, len(ordered_files)):
+                pair = (ordered_files[i], ordered_files[j])
+                pair_counts[pair] += 1
+
+    for line in log_output.splitlines():
+        line = line.strip()
+
+        if line.startswith("COMMIT:"):
+            record_pairs(files_in_commit)
+            files_in_commit.clear()
+
+        elif line and not should_ignore_file(line):
+            files_in_commit.add(line)
+
+    # Process the final commit.
+    record_pairs(files_in_commit)
+
+    return {
+        pair: count
+        for pair, count in pair_counts.items()
+        if count >= min_shared_commits
+    }
+
+
+def get_co_changed_files(
+    min_shared_commits=CO_CHANGE_THRESHOLD
+):
+    """Analyze Git history for files that change together."""
+    output = run_git_command([
+        "log",
+        "--format=COMMIT:%H",
+        "--name-only"
+    ])
+
+    return find_co_changed_files(
+        output,
+        min_shared_commits=min_shared_commits
+    )
+
+
 def main():
     print("\nCODEBASE ARCHAEOLOGIST")
-    print("=" * 36)
+    print("=" * 40)
 
     try:
         total_commits = get_total_commits()
         changes = get_file_changes()
         hotspots = find_hotspots(changes)
+        co_changes = get_co_changed_files()
 
         print(f"\nTotal commits: {total_commits}")
 
-        print("\nMost frequently changed files:")
+        print("\nMOST FREQUENTLY CHANGED FILES")
+        print("-" * 40)
 
         if changes:
             for filename, count in changes.most_common(10):
@@ -125,7 +179,7 @@ def main():
             print("No eligible file changes found.")
 
         print("\nCHANGE HOTSPOTS")
-        print("-" * 36)
+        print("-" * 40)
 
         if hotspots:
             for filename, count in sorted(
@@ -136,13 +190,33 @@ def main():
                 print(f"  REVIEW: {filename} ({count} commits)")
         else:
             print(
-                "No files meet the hotspot threshold "
-                f"of {HOTSPOT_THRESHOLD} commits."
+                f"No files meet the threshold of "
+                f"{HOTSPOT_THRESHOLD} commits."
+            )
+
+        print("\nFILES THAT CHANGE TOGETHER")
+        print("-" * 40)
+
+        if co_changes:
+            for (file_a, file_b), count in sorted(
+                co_changes.items(),
+                key=lambda item: item[1],
+                reverse=True
+            )[:10]:
+                print(
+                    f"  {file_a} <-> {file_b}: "
+                    f"{count} shared commits"
+                )
+        else:
+            print(
+                "No file pairs found that changed together "
+                f"in at least {CO_CHANGE_THRESHOLD} commits."
             )
 
         print(
-            "\nNote: Frequent changes do not automatically "
-            "mean a file contains bugs or is risky."
+            "\nNote: Frequent changes and co-change patterns "
+            "are investigation clues, not proof of bugs or "
+            "direct dependencies."
         )
 
     except (RuntimeError, ValueError) as error:
