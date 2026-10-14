@@ -79,6 +79,7 @@ def count_file_changes(log_output):
         elif line and not should_ignore_file(line):
             files_in_commit.add(line)
 
+    # Process the final commit.
     for filename in files_in_commit:
         changes[filename] += 1
 
@@ -157,6 +158,18 @@ def get_co_changed_files(
     )
 
 
+def generate_repository_summary(
+    total_commits, changes, hotspots, co_changes
+):
+    """Generate a high-level summary of repository activity."""
+    return {
+        "total_commits": total_commits,
+        "files_changed": len(changes),
+        "hotspots": len(hotspots),
+        "co_change_relationships": len(co_changes),
+    }
+
+
 def main():
     print("\nCODEBASE ARCHAEOLOGIST")
     print("=" * 40)
@@ -167,7 +180,19 @@ def main():
         hotspots = find_hotspots(changes)
         co_changes = get_co_changed_files()
 
-        print(f"\nTotal commits: {total_commits}")
+        summary = generate_repository_summary(
+            total_commits, changes, hotspots, co_changes
+        )
+
+        print("\nREPOSITORY SUMMARY")
+        print("-" * 40)
+        print(f"Commits analyzed: {summary['total_commits']}")
+        print(f"Distinct files changed: {summary['files_changed']}")
+        print(f"Change hotspots: {summary['hotspots']}")
+        print(
+            "Recurring co-change relationships: "
+            f"{summary['co_change_relationships']}"
+        )
 
         print("\nMOST FREQUENTLY CHANGED FILES")
         print("-" * 40)

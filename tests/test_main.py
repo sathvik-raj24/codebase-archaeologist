@@ -87,3 +87,28 @@ def test_co_changed_files_respect_threshold():
     )
 
     assert find_co_changed_files(history) == {}
+
+
+from src.main import generate_repository_summary
+
+
+def test_generate_repository_summary():
+    changes = {
+        "src/main.py": 5,
+        "README.md": 2,
+    }
+    hotspots = {"src/main.py": 5}
+    co_changes = {
+        ("README.md", "src/main.py"): 2
+    }
+
+    summary = generate_repository_summary(
+        10, changes, hotspots, co_changes
+    )
+
+    assert summary == {
+        "total_commits": 10,
+        "files_changed": 2,
+        "hotspots": 1,
+        "co_change_relationships": 1,
+    }
